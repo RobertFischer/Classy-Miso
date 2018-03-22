@@ -43,12 +43,16 @@ module Miso.Classy
 	, viewSubBy
 	, viewSubsBy
 	, emptyView
+	, fireEvent
+	, addEventHandler
 	, module Miso
 	, module Network.URI
 	, module RFC.Miso.String
+	, Default(..)
 	) where
 
 import           Control.Lens    hiding ( view )
+import           Data.Default
 import           Data.Map.Strict ( Map )
 import qualified Data.Map.Strict as Map
 import           Data.Typeable
@@ -100,8 +104,8 @@ type ClassySink model = Action model -> IO ()
 type ClassySub model = ClassySink model -> IO ()
 
 -- | Wraps the concept of th e
-class (Eq model, Typeable model, Typeable (Action model)) => Component model where
-	{-# MINIMAL init, view, subcomponents, (update|transition) #-}
+class (Eq model, Typeable model, Typeable (Action model), Default(EventHandler model)) => Component model where
+	{-# MINIMAL init, view, eventHandlers, subcomponents, (update|transition) #-}
 
 	-- | The actions for this component, such as those returned in an 'Effect'
 	type Action model = action | action -> model
@@ -109,8 +113,13 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	-- | Defines the initial arguments that the component expects to receive.
 	type InitArgs model = initargs | initargs -> model
 
+	-- | Defines the kinds of events that the parent can handle.
+	type EventHandler model
+
 	init :: InitArgs model → IO model			-- ^ Initialize the model
 	view :: model -> View (Action model)	-- ^ Render the model into a VDOM-friendly structure
+
+	eventHandlers :: ALens' model [EventHandler model] -- ^ Holds onto all the event handlers.
 
 	subcomponents :: ALens' model [WrappedComponent] -- ^ Holds onto all the subcomponents
 
@@ -119,12 +128,12 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	{-# INLINE routeParser #-}
 
 	-- | Implement this if you want to use the classic way to update.
-	update :: Action model -> model -> ClassyEffect model
+	update :: Action model -> model -> WrappedEffect model
 	update = fromTransition . transition
 	{-# INLINE update #-}
 
 	-- | Implement this if you want to use the 'Transition'-based way to update.
-	transition :: Action model -> ClassyTransition model ()
+	transition :: Action model -> Transition WrappedAction model ()
 	transition = toTransition . update
 	{-# INLINE transition #-}
 
@@ -134,13 +143,27 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	acceptAction _ _ = True
 	{-# INLINE acceptAction #-}
 
--- | Handy method for the common case when you can pass your args down to your subcomponents.
-addSubcomponent :: (Component model, Component sub) => InitArgs model -> model -> (InitArgs model -> IO (InitArgs sub)) -> IO model
-addSubcomponent parentArgs parent argPicker = addSub <$> (subArgs >>= init)
+fireEvent :: (Component model) => model -> (EventHandler model -> WrappedSub) -> WrappedEffect model
+fireEvent model event = Effect model $ event <$> events
 	where
+		events = model^.(cloneLens eventHandlers)
+{-# INLINE fireEvent #-}
+
+-- | Utility method to add an 'EventHandler' instance to a 'Component'.
+addEventHandler :: (Component model) => model -> EventHandler model -> model
+addEventHandler model handler = model & (cloneLens eventHandlers) %~ ((:) handler)
+{-# INLINE addEventHandler #-}
+
+-- | Handy method for the common case when you can pass your args down to your subcomponents.
+addSubcomponent :: (Component model, Component sub) =>
+	InitArgs model -> model -> (InitArgs model -> IO (InitArgs sub)) -> EventHandler sub -> IO model
+addSubcomponent parentArgs parent argPicker handler = addSub . addHandler <$> (subArgs >>= init)
+	where
+		addHandler sub = addEventHandler sub handler
 		subArgs = argPicker parentArgs
 		initSubs = parent^.(cloneLens subcomponents)
 		addSub newSub = parent & (cloneLens subcomponents) .~ (wrapComponent newSub:initSubs)
+{-# INLINE addSubcomponent #-}
 
 -- | For the component itself, and then recursively for all the subcomponents, this attempts to cast
 --	 the action (unwrapped from 'WrappedAction') to the relevant type for that component.
@@ -165,7 +188,7 @@ update' wrapped@(WrappedAction action) initModel =
 				Nothing -> noEff initModel
 				Just myAction ->
 					if acceptAction myAction initModel then
-						bimap wrapAction id $ update myAction initModel
+						update myAction initModel
 					else
 						noEff initModel
 {-# INLINABLE update' #-}
