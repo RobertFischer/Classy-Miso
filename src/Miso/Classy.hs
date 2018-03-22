@@ -1,12 +1,13 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE InstanceSigs        #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PolyKinds           #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeInType          #-}
-{-# LANGUAGE TypeOperators       #-}
-{-# LANGUAGE UnicodeSyntax       #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE InstanceSigs           #-}
+{-# LANGUAGE NamedFieldPuns         #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeInType             #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE UnicodeSyntax          #-}
 #if !MIN_VERSION_base(4,10,0)
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 #endif
@@ -17,6 +18,7 @@ module Miso.Classy
 	, WrappedComponent
 	, wrapComponent
 	, mapWrappedComponent
+	, addSubcomponent
 	, WrappedAction(..)
 	, RouteParser
 	, ClassyEffect
@@ -55,7 +57,7 @@ import qualified Miso.Html       as Html
 import           Network.URI     ( URI (..), parseURI )
 import qualified Network.URL     as URL
 import           RFC.Miso.String
-import           RFC.Prelude
+import           RFC.Prelude     hiding ( init )
 
 -- Need the ability to compare proxies for equivalence
 #if MIN_VERSION_base(4,10,0)
@@ -64,7 +66,7 @@ import Type.Reflection ( eqTypeRep )
 eqProxy :: Proxy a -> Proxy b -> Maybe (a :~: b)
 eqProxy a b = eqTypeRep (typeRep a) (typeRep b)
 #else
--- | Hand-rolled and dangerous implementation of 'eqTypeRep'.
+-- | Hand-rolled and dangerous implementation of 'eqTypeRep'. BOO!
 eqProxy :: (Typeable a, Typeable b) => Proxy a -> Proxy b -> Maybe (a :~: b)
 eqProxy a b
 	| typeRep a == typeRep b     = Just undefined
@@ -131,6 +133,14 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	acceptAction :: Action model -> model -> Bool
 	acceptAction _ _ = True
 	{-# INLINE acceptAction #-}
+
+-- | Handy method for the common case when you can pass your args down to your subcomponents.
+addSubcomponent :: (Component model, Component sub) => InitArgs model -> model -> (InitArgs model -> IO (InitArgs sub)) -> IO model
+addSubcomponent parentArgs parent argPicker = addSub <$> (subArgs >>= init)
+	where
+		subArgs = argPicker parentArgs
+		initSubs = parent^.(cloneLens subcomponents)
+		addSub newSub = parent & (cloneLens subcomponents) .~ (wrapComponent newSub:initSubs)
 
 -- | For the component itself, and then recursively for all the subcomponents, this attempts to cast
 --	 the action (unwrapped from 'WrappedAction') to the relevant type for that component.
