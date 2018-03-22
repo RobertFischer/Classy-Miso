@@ -1,5 +1,5 @@
 name:           classy-miso
-version:        0.1.0.0
+version:        0.0.0.1
 description:    Please see the README on Github at <https://github.com/RobertFischer/Classy-Miso#README.md>
 homepage:       https://github.com/RobertFischer/Classy-Miso#README.md
 bug-reports:    https://github.com/RobertFischer/Classy-Miso#README.md
@@ -10,6 +10,8 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
+category:       web
+synopsis:       Typeclass based support for Miso, the Tasty Web Framework for Haskell.
 
 source-repository head
   type: git
@@ -41,7 +43,6 @@ library
                      , MonadFailDesugaring
                      , MultiParamTypeClasses
                      , TypeFamilies
-                     , TypeFamilyDependencies
                      , ExistentialQuantification
                      , FlexibleContexts
                      , FlexibleInstances
@@ -75,7 +76,6 @@ executable classy-miso-demo
                      , MonadFailDesugaring
                      , MultiParamTypeClasses
                      , TypeFamilies
-                     , TypeFamilyDependencies
                      , RankNTypes
 
 test-suite ghcjs-test
