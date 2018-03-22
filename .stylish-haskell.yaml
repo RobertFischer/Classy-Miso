@@ -229,3 +229,4 @@ language_extensions:
   - FlexibleContexts
   - FlexibleInstances
   - TypeFamilyDependencies
+  - RankNTypes

@@ -1,4 +1,5 @@
-{-# LANGUAGE UnicodeSyntax #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE UnicodeSyntax  #-}
 
 module Miso.Classy
 	( Component(..)
@@ -6,7 +7,6 @@ module Miso.Classy
 	, WrappedComponent(..)
 	, WrappedAction(..)
 	, RouteParser
-	, RouteError
 	, ClassyEffect
 	, WrappedEffect
 	, ClassyTransition
@@ -16,14 +16,27 @@ module Miso.Classy
 	, WrappedSink
 	, wrapAction
 	, wrapSub
+	, ViewSpec
+	, routeToURI
+	, toRoutePath
+	, getCurrentURI
+	, parseCurrentURI
+	, vsRoutePath
+	, specToView
+	, module Miso
+	, module Network.URI
+	, module RFC.Miso.String
 	) where
 
-import Control.Lens
-import Data.Typeable   ( Typeable, cast )
-import Data.Void       ( Void )
-import Miso            hiding ( App (..) )
-import RFC.Prelude
-import Text.Megaparsec
+import           Control.Lens    hiding ( view )
+import           Data.Map.Strict ( Map )
+import qualified Data.Map.Strict as Map
+import           Data.Typeable   ( Typeable, cast )
+import           Miso            hiding ( App (..), getCurrentURI )
+import           Network.URI     ( URI (..), parseURI )
+import qualified Network.URL     as URL
+import           RFC.Miso.String
+import           RFC.Prelude
 
 -- | An 'Effect' where we wrap up the action type as a 'WrappedAction'.
 type WrappedEffect model = Effect WrappedAction model
@@ -62,7 +75,7 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	subcomponents :: ALens' model [WrappedComponent] -- ^ Holds onto all the subcomponents
 
 	routeParser :: model -> RouteParser -- ^ Provides a parser that defines the route for this model
-	routeParser _ = fail "Model is not a route"
+	routeParser _ _ = fail "Model is not a route"
 	{-# INLINE routeParser #-}
 
 	update :: Action model -> model -> ClassyEffect model
@@ -97,14 +110,16 @@ update' wrapped@(WrappedAction action) initModel =
 				Just myAction -> bimap wrapAction id $ update myAction initModel
 {-# INLINABLE update' #-}
 
--- | The type of a 'Parsec' parser for processing routes. It will consume a segment
---   of the URL hash value, and (if it successfully parsed), it returns the action
---   that should fire.
-type RouteParser = Parsec Void StrictText WrappedAction
-type RouteError = ParseError Char Void -- ^ The error type for routes.
+-- | The function for processing routes from route paths. It will consume the current
+--   'RoutePath', and (if it successfully parsed), it returns the action that should
+--   fire.
+type RouteParser = forall m. MonadFail m => RoutePath -> m WrappedAction
 
 -- | A wrapper around components that hides the existential quantification.
 data WrappedComponent = forall child. Component child ⇒ WrappedComponent child
+instance Eq WrappedComponent where
+  (==) (WrappedComponent left) (WrappedComponent right) =
+    maybe False (left ==) (cast right)
 
 -- | A wrapper around actions, such as those returned in an 'Effect', which
 --   hides the existential quantification.
@@ -119,3 +134,126 @@ wrapAction = WrappedAction
 wrapSub :: Component model => Sub (Action model) -> WrappedSub
 wrapSub sub sink = sub (sink . wrapAction)
 {-# INLINE wrapSub #-}
+
+
+-- | A single segment of a route (a piece between slashes in the URI fragment)
+type RouteSegment = StrictText
+
+-- | The value of the query section of a route
+type RouteQuery = Map StrictText [StrictText]
+
+-- | The full path of the route. The third URL is the "base URI",
+--   and does not necessarily contain the 'RouteSegment' and the
+--   'RouteQuery' pieces.
+type RoutePath = ([RouteSegment], RouteQuery, URI)
+
+-- | Generates a URI from the route path by merging the 'RouteQuery' into the 'uriQuery'
+--   and the '[RouteSegment]' into the 'uriFragment'.
+routeToURI :: RoutePath -> URI
+routeToURI (segs, qry, uri) =
+  uri
+    { uriQuery = '?':query
+    , uriFragment = '#':frag
+    }
+  where
+    encodeString :: ConvertibleStrings a String => Bool -> a -> String -- Second argument is: "Is this a query string?"
+    encodeString spaceToPlus = URL.encString spaceToPlus URL.ok_param . cs
+    query :: String
+    query = intercalate "&" . pairsToTerms $ Map.toList qry
+    pairsToTerms [] = []
+    pairsToTerms ((key,[]):rest)       = (encodeString True key) : pairsToTerms rest
+    pairsToTerms ((key,([val])):rest) = (encodeString True key <> "=" <> (encodeString True val)) : pairsToTerms rest
+    pairsToTerms ((key,vals):rest)     = (encodeString True key <> "=" <> intercalate "," (encodeString True <$> vals)) : pairsToTerms rest
+    frag :: String
+    frag = intercalate "/" (segToPath <$> segs)
+    segToPath :: RouteSegment -> String
+    segToPath = encodeString False
+{-# INLINABLE routeToURI #-}
+
+
+-- | Parses a 'URI' into a 'RoutePath'
+toRoutePath :: URI -> RoutePath
+toRoutePath uri@URI{uriFragment,uriQuery} =
+      ( pathToSegments . parseHash $ uriFragment
+      , parseQuery uriQuery
+      , uri
+      )
+  where
+    decodeString :: String -> StrictText
+    decodeString str = cs . fromMaybe str . URL.decString True $ str
+    pathToSegments :: String -> [RouteSegment]
+    pathToSegments "" = []
+    pathToSegments ('/':rest) = pathToSegments rest
+    pathToSegments path = (decodeString start) : pathToSegments rest
+      where
+        (start,rest) = splitOnSlash path
+        splitOnSlash "" = ("","")
+        splitOnSlash ('/':content) = splitOnSlash content
+        splitOnSlash content =
+          case span ('/' /=) content of
+            ([],[])               -> ("","")
+            ([], _:theRest)       -> splitOnSlash theRest
+            (theStart, [])        -> (theStart, "")
+            (theStart, _:theRest) -> (theStart, theRest)
+    parseHash ('#':rest) = parseHash rest
+    parseHash ('!':rest) = parseHash rest
+    parseHash ('/':rest) = parseHash rest
+    parseHash hash       = hash
+    parseQuery ('?':rest) = parseQuery rest
+    parseQuery query =
+      case URL.importParams query of
+        Nothing ->
+          Map.empty
+        Just pairs ->
+          fmap (second listify) pairs &
+          Map.fromListWith (++) &
+          Map.map sort &
+          Map.map (fmap cs) &
+          Map.mapKeys cs
+    listify :: String -> [String]
+    listify ""        = []
+    listify (',':val) = listify val
+    listify val       = start : listify rest
+      where
+        (start,rest) = splitOnComma val
+        splitOnComma ""            = ("","")
+        splitOnComma (',':content) = splitOnComma content
+        splitOnComma (' ':content) = splitOnComma content
+        splitOnComma content =
+          case span (',' /=) content of
+            ([], [])              -> ("", "")
+            ([], _:theRest)       -> splitOnComma theRest
+            (theStart, [])        -> (theStart, "")
+            (theStart, _:theRest) -> (theStart, theRest)
+{-# INLINABLE toRoutePath #-}
+
+-- | Retrieves the current location of the window from "window.location.href".
+foreign import javascript safe "$r = (window && window.location && window.location.href) || '';"
+  getWindowLocationHref :: IO MisoString
+
+-- | Gets the current URI.
+getCurrentURI :: (MonadIO m, MonadFail m) => m URI
+getCurrentURI = do
+  href <- fromMisoString <$> liftIO getWindowLocationHref
+  case parseURI href of
+    Nothing  -> fail $ "Could not parse URI from window.location: " <> href
+    Just uri -> return uri
+{-# INLINE getCurrentURI #-}
+
+-- | Utility method to parse the current URI.
+parseCurrentURI :: (MonadIO m) => m RoutePath
+parseCurrentURI = toRoutePath <$> liftIO getCurrentURI
+{-# INLINE parseCurrentURI #-}
+
+-- | This contains the information necessary to render a view.
+newtype ViewSpec = ViewSpec (WrappedComponent, RoutePath) deriving (Eq)
+
+-- | Get the route path which matched for the 'ViewSpec'
+vsRoutePath :: ViewSpec -> RoutePath
+vsRoutePath (ViewSpec (_,rp)) = rp
+{-# INLINE vsRoutePath #-}
+
+-- | Renders a view based on the viewspec
+specToView :: ViewSpec -> View WrappedAction
+specToView (ViewSpec (WrappedComponent viewModel,_)) = WrappedAction <$> view viewModel
+{-# INLINE specToView #-}

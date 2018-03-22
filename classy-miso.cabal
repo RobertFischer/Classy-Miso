@@ -24,16 +24,18 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base       >= 4.7 && <5
-    , miso       >= 0.15 && < 0.16
-    , rfc        >= 0.0.0.25 && < 0.1
-    , megaparsec >= 6.4 && < 7
-    , lens       >= 4.15 && < 5
+      base        >= 4.7.0.0 && <5
+    , miso        >= 0.15.0.0 && < 0.16
+    , rfc         >= 0.0.0.25 && < 0.1
+    , megaparsec  >= 6.4.0.0 && < 7
+    , lens        >= 4.15.0.0 && < 5
+    , network-uri >= 2.6.1.0 && < 2.7
+    , containers  >= 0.5.7.1 && < 0.6
+    , url         >= 2.1.3 && < 2.2
   if impl(ghcjs)
     build-depends:     aeson
                      , bifunctors
     cpp-options:       -DCLIENT -DGHCJS_BROWSER -DBROWSER
-  exposed-modules:     Miso.Classy
   default-language: Haskell2010
   default-extensions:  RebindableSyntax
                      , MonadFailDesugaring
@@ -43,12 +45,14 @@ library
                      , ExistentialQuantification
                      , FlexibleContexts
                      , FlexibleInstances
+                     , RankNTypes
   ghc-options:         -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -fno-warn-orphans
   ghc-options:         -fno-max-relevant-binds -fprint-potential-instances -Wno-missing-monadfail-instances
   ghc-options:         -fno-warn-name-shadowing -fno-warn-tabs -Wall-missed-specialisations -Wnoncanonical-monad-instances
   ghc-options:         -Wnoncanonical-monadfail-instances -Wimplicit-prelude -Wmissing-exported-signatures -Widentities
   if flag(Development)
     ghc-options:       -Werror -dcore-lint -dcmm-lint
+  exposed-modules:     Miso.Classy
 
 executable classy-miso-demo
   main-is: Main.hs
@@ -71,6 +75,7 @@ executable classy-miso-demo
                      , MultiParamTypeClasses
                      , TypeFamilies
                      , TypeFamilyDependencies
+                     , RankNTypes
 
 test-suite ghcjs-test
   type: exitcode-stdio-1.0
