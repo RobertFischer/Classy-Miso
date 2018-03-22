@@ -7,7 +7,9 @@
 {-# LANGUAGE TypeInType          #-}
 {-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE UnicodeSyntax       #-}
+#if !MIN_VERSION_base(4,10,0)
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
+#endif
 
 module Miso.Classy
 	( Component(..)
@@ -114,13 +116,21 @@ class (Eq model, Typeable model, Typeable (Action model)) => Component model whe
 	routeParser _ _ = fail "Model is not a route"
 	{-# INLINE routeParser #-}
 
+	-- | Implement this if you want to use the classic way to update.
 	update :: Action model -> model -> ClassyEffect model
 	update = fromTransition . transition
 	{-# INLINE update #-}
 
+	-- | Implement this if you want to use the 'Transition'-based way to update.
 	transition :: Action model -> ClassyTransition model ()
 	transition = toTransition . update
 	{-# INLINE transition #-}
+
+	-- | Whether or not this action is really for this model. By default, we accept all actions. But, if you've
+	--   got multiple components of the same type, you may need to be more picky.
+	acceptAction :: Action model -> model -> Bool
+	acceptAction _ _ = True
+	{-# INLINE acceptAction #-}
 
 -- | For the component itself, and then recursively for all the subcomponents, this attempts to cast
 --	 the action (unwrapped from 'WrappedAction') to the relevant type for that component.
@@ -143,12 +153,15 @@ update' wrapped@(WrappedAction action) initModel =
 		initEffect =
 			case cast action of
 				Nothing -> noEff initModel
-				Just myAction -> bimap wrapAction id $ update myAction initModel
+				Just myAction ->
+					if acceptAction myAction initModel then
+						bimap wrapAction id $ update myAction initModel
+					else
+						noEff initModel
 {-# INLINABLE update' #-}
 
 -- | The function for processing routes from route paths. It will consume the current
---	 'RoutePath', and (if it successfully parsed), it returns the action that should
---	 fire.
+--	 'RoutePath', and (if it successfully parsed), it returns the component that handles the route.
 type RouteParser = forall m. MonadFail m => RoutePath -> m WrappedComponent
 
 -- | A wrapper around components that hides the existential quantification.
@@ -188,6 +201,8 @@ wrapSub :: Component model => Sub (Action model) -> WrappedSub
 wrapSub sub sink = sub (sink . wrapAction)
 {-# INLINE wrapSub #-}
 
+-- | Ties together 'actionToSub' and 'wrapSub' for you,
+--   so you can go all the way from an action to a 'WrappedSub'.
 actionToWrappedSub :: Component model => Action model -> WrappedSub
 actionToWrappedSub = wrapSub . actionToSub
 {-# INLINE actionToWrappedSub #-}
