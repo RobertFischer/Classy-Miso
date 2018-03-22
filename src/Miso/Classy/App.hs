@@ -11,6 +11,7 @@ module Miso.Classy.App
 	, ViewSpec(..)
 	, vsRoutePath
 	, specToView
+	, defaultSubscriptions
 	, module Miso.Classy
 	) where
 
@@ -19,14 +20,16 @@ import           Miso         hiding ( App (..) )
 import qualified Miso
 import           Miso.Classy
 import           Network.URI  ( URI (..), parseURI )
-import           RFC.Prelude
+import           RFC.Prelude  hiding ( init )
 
 class (Component model) => MisoApp model where
-  createApp :: InitArgs model -> IO model
-  subscriptions :: model -> [Sub WrappedAction]
   initialAction :: model -> Action model
   notFoundView :: model -> WrappedComponent
   viewSpec :: ALens' model ViewSpec
+
+  subscriptions :: model -> [Sub WrappedAction]
+  subscriptions = const defaultSubscriptions
+  {-# INLINE subscriptions #-}
 
 instance (MisoApp model) => HasURI model where
   lensURI :: Lens' model URI
@@ -40,6 +43,11 @@ instance (MisoApp model) => HasURI model where
       )
     )
   {-# INLINE lensURI #-}
+
+-- | These are the default subscriptions that we automatically connect to.
+defaultSubscriptions :: [Sub WrappedAction]
+defaultSubscriptions = []
+{-# INLINE defaultSubscriptions #-}
 
 applyRoute :: (MisoApp model) => model -> RoutePath -> Maybe ViewSpec
 applyRoute model routePath =
@@ -70,7 +78,7 @@ appToRecord model = Miso.App
 --   expecting there to be a DOM in existence.
 startClientApp :: (MisoApp model, MonadIO m) => InitArgs model -> m ()
 startClientApp args = liftIO $ do
-  app <- createApp args
+  app <- init args
   Miso.startApp $ appToRecord app
 {-# INLINE startClientApp #-}
 
@@ -78,7 +86,7 @@ startClientApp args = liftIO $ do
 --   that there is an isomorphic DOM in existence already.
 startIsoClientApp :: (MisoApp model, MonadIO m) => InitArgs model -> m ()
 startIsoClientApp args = liftIO $ do
-  app <- createApp args
+  app <- init args
   Miso.startApp $ appToRecord app
 {-# INLINE startIsoClientApp #-}
 
