@@ -24,7 +24,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base        >= 4.7.0.0 && <5
+      base        >= 4.7 && <5
     , miso        >= 0.15.0.0 && < 0.16
     , rfc         >= 0.0.0.25 && < 0.1
     , megaparsec  >= 6.4.0.0 && < 7
@@ -53,6 +53,7 @@ library
   if flag(Development)
     ghc-options:       -Werror -dcore-lint -dcmm-lint
   exposed-modules:     Miso.Classy
+                     , Miso.Classy.App
 
 executable classy-miso-demo
   main-is: Main.hs
