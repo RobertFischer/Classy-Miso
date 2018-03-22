@@ -26,14 +26,16 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base        >= 4.7 && <5
-    , miso        >= 0.15.0.0 && < 0.16
-    , rfc         >= 0.0.0.25 && < 0.1
-    , megaparsec  >= 6.4.0.0 && < 7
-    , lens        >= 4.15.0.0 && < 5
-    , network-uri >= 2.6.1.0 && < 2.7
-    , containers  >= 0.5.7.1 && < 0.6
-    , url         >= 2.1.3 && < 2.2
+      base          >= 4.7 && <5
+    , miso          >= 0.15.0.0 && < 0.16
+    , rfc           >= 0.0.0.25 && < 0.1
+    , megaparsec    >= 6.4.0.0 && < 7
+    , lens          >= 4.15.0.0 && < 5
+    , network-uri   >= 2.6.1.0 && < 2.7
+    , containers    >= 0.5.7.1 && < 0.6
+    , url           >= 2.1.3 && < 2.2
+    , data-default  >= 0.7.1.1 && < 0.8
+    , transformers  >= 0.5.2.0 && < 0.6
   if impl(ghcjs)
     build-depends:     aeson
                      , bifunctors
