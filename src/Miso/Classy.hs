@@ -1,13 +1,14 @@
-{-# LANGUAGE CPP                    #-}
-{-# LANGUAGE InstanceSigs           #-}
-{-# LANGUAGE NamedFieldPuns         #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE PolyKinds              #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE TypeInType             #-}
-{-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE UnicodeSyntax          #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE InstanceSigs              #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeFamilyDependencies    #-}
+{-# LANGUAGE TypeInType                #-}
+{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE UnicodeSyntax             #-}
 #if !MIN_VERSION_base(4,10,0)
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 #endif
@@ -24,6 +25,7 @@ module Miso.Classy
 	, ClassyEffect
 	, WrappedEffect
 	, ClassyTransition
+	, effectToTransition
 	, ClassySub
 	, ClassySink
 	, WrappedView
@@ -51,17 +53,19 @@ module Miso.Classy
 	, Default(..)
 	) where
 
-import           Control.Lens    hiding ( view )
+import           Control.Lens                      hiding ( view )
+import           Control.Monad.Trans.State.Strict  ( put )
+import           Control.Monad.Trans.Writer.Strict ( tell )
 import           Data.Default
-import           Data.Map.Strict ( Map )
-import qualified Data.Map.Strict as Map
+import           Data.Map.Strict                   ( Map )
+import qualified Data.Map.Strict                   as Map
 import           Data.Typeable
-import           Miso            hiding ( App (..), getCurrentURI )
-import qualified Miso.Html       as Html
-import           Network.URI     ( URI (..), parseURI )
-import qualified Network.URL     as URL
+import           Miso                              hiding ( App (..), getCurrentURI )
+import qualified Miso.Html                         as Html
+import           Network.URI                       ( URI (..), parseURI )
+import qualified Network.URL                       as URL
 import           RFC.Miso.String
-import           RFC.Prelude     hiding ( init )
+import           RFC.Prelude                       hiding ( init )
 
 -- Need the ability to compare proxies for equivalence
 #if MIN_VERSION_base(4,10,0)
@@ -85,7 +89,7 @@ type WrappedView = View WrappedAction
 -- | An 'Effect' where we wrap up the action type as a 'WrappedAction'.
 type WrappedEffect model = Effect WrappedAction model
 
--- | A 'Sink' where we wrap up the action type as a 'WrappedAction'.
+-- | A 'Sink' where we consume the action type as a 'WrappedAction'.
 type WrappedSink = WrappedAction -> IO ()
 
 -- | A 'Sub' where we wrap up the action type as a 'WrappedSub'.
@@ -122,6 +126,8 @@ class (Eq model, Typeable model, Typeable (Action model), Default(EventHandler m
 	eventHandlers :: ALens' model [EventHandler model] -- ^ Holds onto all the event handlers.
 
 	subcomponents :: ALens' model [WrappedComponent] -- ^ Holds onto all the subcomponents
+	subcomponents = lens (const []) (const)
+	{-# INLINE subcomponents #-}
 
 	routeParser :: model -> RouteParser -- ^ Provides a parser that defines the route for this model
 	routeParser _ _ = fail "Model is not a route"
@@ -142,6 +148,12 @@ class (Eq model, Typeable model, Typeable (Action model), Default(EventHandler m
 	acceptAction :: Action model -> model -> Bool
 	acceptAction _ _ = True
 	{-# INLINE acceptAction #-}
+
+-- | Converts an 'Effect' into a 'Transition'.
+effectToTransition :: Effect action model -> Transition action model ()
+effectToTransition (Effect model actions) = do
+	lift $ tell actions
+	put model
 
 fireEvent :: (Component model) => model -> (EventHandler model -> WrappedSub) -> WrappedEffect model
 fireEvent model event = Effect model $ event <$> events
@@ -176,7 +188,7 @@ update' wrapped@(WrappedAction action) initModel =
 		Effect foldedModel foldedEffects =
 			foldr foldImpl initEffect (initModel^.(cloneLens subcomponents))
 		foldImpl (WrappedComponent (_,subcomp)) (Effect roundModel roundEffects) =
-			let result = update' wrapped subcomp in
+			let result = update' wrapped subcomp in -- TODO Do this recursion as a scheduled IO
 			let Effect wrappedModel wrappedEffects = result &
 				bimap
 					id
@@ -389,3 +401,4 @@ wrappedComponentPxyEq targetPxy (WrappedComponent(pxy,_)) = isJust $ eqProxy tar
 emptyView :: View anything
 emptyView = Html.text ""
 {-# INLINE emptyView #-}
+
