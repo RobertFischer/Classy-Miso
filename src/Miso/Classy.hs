@@ -47,6 +47,8 @@ module Miso.Classy
 	, viewSubBy
 	, viewSubsBy
 	, emptyView
+	, emptySub
+	, emptyWrappedSub
 	, fireEvent
 	, addEventHandler
 	, module Miso
@@ -420,3 +422,12 @@ emptyView :: View anything
 emptyView = Html.text ""
 {-# INLINE emptyView #-}
 
+-- | An empty (nop) 'Sub'
+emptySub :: Component a => Sub (Action a)
+emptySub = const $ return ()
+{-# INLINE emptySub #-}
+
+-- | A wrapped version of 'emptySub'
+emptyWrappedSub :: WrappedSub
+emptyWrappedSub = const $ return ()
+{-# INLINE emptyWrappedSub #-}
