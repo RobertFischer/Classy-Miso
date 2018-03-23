@@ -20,6 +20,7 @@ module Miso.Classy
 	, wrapComponent
 	, mapWrappedComponent
 	, addSubcomponent
+	, initSubcomponent
 	, WrappedAction(..)
 	, RouteParser
 	, ClassyEffect
@@ -40,6 +41,7 @@ module Miso.Classy
 	, RoutePath
 	, actionToSub
 	, actionToWrappedSub
+	, wrappedActionToSub
 	, viewSub
 	, viewSubs
 	, viewSubBy
@@ -108,8 +110,8 @@ type ClassySink model = Action model -> IO ()
 type ClassySub model = ClassySink model -> IO ()
 
 -- | Wraps the concept of th e
-class (Eq model, Typeable model, Typeable (Action model), Default(EventHandler model)) => Component model where
-	{-# MINIMAL init, view, eventHandlers, subcomponents, (update|transition) #-}
+class (Eq model, Typeable model, Eq (Action model), Typeable (Action model), Default(EventHandler model)) => Component model where
+	{-# MINIMAL init, view, eventHandlers, (update|transition) #-}
 
 	-- | The actions for this component, such as those returned in an 'Effect'
 	type Action model = action | action -> model
@@ -154,6 +156,7 @@ effectToTransition :: Effect action model -> Transition action model ()
 effectToTransition (Effect model actions) = do
 	lift $ tell actions
 	put model
+{-# INLINE effectToTransition #-}
 
 fireEvent :: (Component model) => model -> (EventHandler model -> WrappedSub) -> WrappedEffect model
 fireEvent model event = Effect model $ event <$> events
@@ -166,16 +169,21 @@ addEventHandler :: (Component model) => model -> EventHandler model -> model
 addEventHandler model handler = model & (cloneLens eventHandlers) %~ ((:) handler)
 {-# INLINE addEventHandler #-}
 
+addSubcomponent :: (Component parent, Component child) => parent -> child -> parent
+addSubcomponent parent child =
+	parent & (cloneLens subcomponents) %~ ((:) $ wrapComponent child)
+{-# INLINE addSubcomponent #-}
+
 -- | Handy method for the common case when you can pass your args down to your subcomponents.
-addSubcomponent :: (Component model, Component sub) =>
+initSubcomponent :: (Component model, Component sub) =>
 	InitArgs model -> model -> (InitArgs model -> IO (InitArgs sub)) -> EventHandler sub -> IO model
-addSubcomponent parentArgs parent argPicker handler = addSub . addHandler <$> (subArgs >>= init)
+initSubcomponent parentArgs parent argPicker handler = addSub . addHandler <$> (subArgs >>= init)
 	where
 		addHandler sub = addEventHandler sub handler
 		subArgs = argPicker parentArgs
 		initSubs = parent^.(cloneLens subcomponents)
 		addSub newSub = parent & (cloneLens subcomponents) .~ (wrapComponent newSub:initSubs)
-{-# INLINE addSubcomponent #-}
+{-# INLINE initSubcomponent #-}
 
 -- | For the component itself, and then recursively for all the subcomponents, this attempts to cast
 --	 the action (unwrapped from 'WrappedAction') to the relevant type for that component.
@@ -231,6 +239,11 @@ mapWrappedComponent f (WrappedComponent(_,it)) = f it
 --	 hides the existential quantification.
 data WrappedAction = forall child. Component child => WrappedAction (Action child)
 
+instance Eq WrappedAction where
+	(==) (WrappedAction left) (WrappedAction right) =
+		maybe False (right ==) (cast left)
+	{-# INLINE (==) #-}
+
 -- | Utility function for wrapping up an action into a 'WrappedAction'
 wrapAction :: Component model => Action model -> WrappedAction
 wrapAction = WrappedAction
@@ -240,6 +253,11 @@ wrapAction = WrappedAction
 actionToSub :: Action model -> Sub (Action model)
 actionToSub action sink = sink action
 {-# INLINE actionToSub #-}
+
+-- | Utility method for converting a 'WrappedAction' into a 'WrappedSub'
+wrappedActionToSub :: WrappedAction -> WrappedSub
+wrappedActionToSub action sink = sink action
+{-# INLINE wrappedActionToSub #-}
 
 -- | Utility function for wrapping up a 'Sub' into a 'WrappedSub'
 wrapSub :: Component model => Sub (Action model) -> WrappedSub
