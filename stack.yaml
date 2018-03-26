@@ -14,7 +14,7 @@ packages:
 extra-deps:
 - lens-4.16
 - megaparsec-6.4.1
-- miso-0.15.0.0
+- miso-0.16.0.0
 - rfc-0.0.0.25
 - aeson-diff-1.1.0.4
 - classy-prelude-1.4.0

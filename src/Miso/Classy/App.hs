@@ -12,6 +12,7 @@ module Miso.Classy.App
 	, vsRoutePath
 	, specToView
 	, defaultSubscriptions
+	, applyRoute
 	, module Miso.Classy
 	) where
 
@@ -30,19 +31,6 @@ class (Component model) => MisoApp model where
   subscriptions :: model -> [Sub WrappedAction]
   subscriptions = const defaultSubscriptions
   {-# INLINE subscriptions #-}
-
-instance (MisoApp model) => HasURI model where
-  lensURI :: Lens' model URI
-  lensURI = lens
-    (\model -> model^.(cloneLens viewSpec) & vsUri)
-    (\model newUri -> model & (cloneLens viewSpec) .~
-      (let theRoutePath = toRoutePath newUri in
-        fromMaybe
-          (ViewSpec (notFoundView model, theRoutePath))
-          (applyRoute model theRoutePath)
-      )
-    )
-  {-# INLINE lensURI #-}
 
 -- | These are the default subscriptions that we automatically connect to.
 defaultSubscriptions :: [Sub WrappedAction]
@@ -97,10 +85,6 @@ newtype ViewSpec = ViewSpec (WrappedComponent, RoutePath) deriving (Eq)
 vsRoutePath :: ViewSpec -> RoutePath
 vsRoutePath (ViewSpec (_,rp)) = rp
 {-# INLINE vsRoutePath #-}
-
-vsUri :: ViewSpec -> URI
-vsUri (ViewSpec (_,(_,_,uri))) = uri
-{-# INLINE vsUri #-}
 
 -- | Renders a view based on the viewspec
 specToView :: ViewSpec -> View WrappedAction

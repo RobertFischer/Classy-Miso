@@ -1,5 +1,5 @@
 name:           classy-miso
-version:        0.0.0.1
+version:        0.0.0.2
 description:    Please see the README on Github at <https://github.com/RobertFischer/Classy-Miso#README.md>
 homepage:       https://github.com/RobertFischer/Classy-Miso#README.md
 bug-reports:    https://github.com/RobertFischer/Classy-Miso#README.md
@@ -27,7 +27,7 @@ library
       src
   build-depends:
       base          >= 4.7 && <5
-    , miso          >= 0.15.0.0 && < 0.16
+    , miso          >= 0.16.0.0 && < 0.17
     , rfc           >= 0.0.0.25 && < 0.1
     , megaparsec    >= 6.4.0.0 && < 7
     , lens          >= 4.15.0.0 && < 5
