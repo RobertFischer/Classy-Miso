@@ -21,6 +21,7 @@ module Miso.Classy
 	, mapWrappedComponent
 	, addSubcomponent
 	, initSubcomponent
+	, mapSubcomponents
 	, WrappedAction(..)
 	, RouteParser
 	, ClassyEffect
@@ -46,6 +47,7 @@ module Miso.Classy
 	, viewSubs
 	, viewSubBy
 	, viewSubsBy
+	, viewAllSubs
 	, emptyView
 	, emptySub
 	, emptyWrappedSub
@@ -237,6 +239,12 @@ mapWrappedComponent :: (forall model. (Component model, Typeable model) => model
 mapWrappedComponent f (WrappedComponent(_,it)) = f it
 {-# INLINE mapWrappedComponent #-}
 
+mapSubcomponents :: (Component parent, Component expectedType) =>
+	Proxy expectedType -> (expectedType -> a) -> parent -> [a]
+mapSubcomponents _ f parent =
+		catMaybes $ mapWrappedComponent (fmap f . cast) <$> parent^.cloneLens subcomponents
+{-# INLINE mapSubcomponents #-}
+
 -- | A wrapper around actions, such as those returned in an 'Effect', which
 --	 hides the existential quantification.
 data WrappedAction = forall child. Component child => WrappedAction (Action child)
@@ -411,6 +419,11 @@ viewSubsBy parent test =
 viewSubs :: (Component model, Component sub) => model -> Proxy sub -> [WrappedView]
 viewSubs parent subType = viewSubsBy parent (wrappedComponentPxyEq subType)
 {-# INLINE viewSubs #-}
+
+-- | View all subcomponents regardless
+viewAllSubs :: (Component model) => model -> [WrappedView]
+viewAllSubs parent = viewSubsBy parent (const True)
+{-# INLINE viewAllSubs #-}
 
 -- | Test that a 'WrappedComponent' is equal to a given type.
 wrappedComponentPxyEq :: (Component target) => Proxy target -> WrappedComponent -> Bool
