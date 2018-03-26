@@ -233,7 +233,7 @@ wrapComponent child = WrappedComponent (Proxy, child)
 
 -- | Allows you to effectively extract the component, but note that the type of the
 --   wrapped component can't escape its scope.
-mapWrappedComponent :: (forall model. Component model => model -> a) -> WrappedComponent -> a
+mapWrappedComponent :: (forall model. (Component model, Typeable model) => model -> a) -> WrappedComponent -> a
 mapWrappedComponent f (WrappedComponent(_,it)) = f it
 {-# INLINE mapWrappedComponent #-}
 
@@ -423,7 +423,7 @@ emptyView = Html.text ""
 {-# INLINE emptyView #-}
 
 -- | An empty (nop) 'Sub'
-emptySub :: Component a => Sub (Action a)
+emptySub :: Sub (Action a)
 emptySub = const $ return ()
 {-# INLINE emptySub #-}
 
