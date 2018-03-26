@@ -27,7 +27,7 @@ library
       src
   build-depends:
       base          >= 4.7 && <5
-    , miso          >= 0.16.0.0 && < 0.17
+    , miso          >= 0.17.0.0 && < 0.18
     , rfc           >= 0.0.0.25 && < 0.1
     , megaparsec    >= 6.4.0.0 && < 7
     , lens          >= 4.15.0.0 && < 5
