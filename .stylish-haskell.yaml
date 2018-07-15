@@ -7,7 +7,7 @@
 steps:
   # Convert some ASCII sequences to their Unicode equivalents. This is disabled
   # by default.
-  #- unicode_syntax:
+  # - unicode_syntax:
   #     # In order to make this work, we also need to insert the UnicodeSyntax
   #     # language pragma. If this flag is set to true, we insert it when it's
   #     # not already present. You may want to disable it if you configure
@@ -21,7 +21,7 @@ steps:
   - simple_align:
       cases: true
       top_level_patterns: true
-      records: true
+      records: false
 
   # Import cleanup
   - imports:
@@ -126,7 +126,7 @@ steps:
       #
       # - module_name: align under start of module name.
       #   Useful for 'file' and 'group' align settings.
-      list_padding: 4
+      list_padding: 2
 
       # Separate lists option affects formatting of import list for type
       # or class. The only difference is single space between type and list
@@ -220,13 +220,5 @@ newline: lf
 #
 # No language extensions are enabled by default.
 language_extensions:
-  # - TemplateHaskell
-  # - QuasiQuotes
-  - MultiParamTypeClasses
-  - TypeFamilies
-  - ExistentialQuantification
-  - RebindableSyntax
-  - FlexibleContexts
-  - FlexibleInstances
-  - TypeFamilyDependencies
-  - RankNTypes
+   - OverloadedStrings
+   - NamedFieldPuns
